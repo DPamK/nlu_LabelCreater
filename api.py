@@ -17,6 +17,7 @@ def get_data():
       "task":"",
       "num": 1,
       "cut_mode": 1
+      "id":1
     }
     '''
     data = request.get_json()
@@ -26,24 +27,32 @@ def get_data():
     mode = data['cut_mode']
     num = data['num']
     json_res = []
-    result = ldb.get_unlabeledData(name,task,num)
+    if 'id' in data:
+        id = data['id']
+    else:
+        id = -1
+    result = ldb.get_unlabeledData(labeler=name,task=task,num=num,id=id)
     if isinstance(result,str):
         return {"error":result}
     else:
         for item in result:
             order = item['order']
-            if mode == 1:
-                wordlist = cuter.cut_order(order)
+            label = item['label']
+            if len(label) == 0:
+                if mode == 1:
+                    wordlist = cuter.cut_order(order)
+                else:
+                    wordlist = cuter.cut_order_word(order)
+                index = word2index(wordlist)
+                candidates = []
+                for w,i in zip(wordlist,index):
+                    temp = {
+                        "word":w,
+                        "ids":i
+                    }
+                    candidates.append(temp)
             else:
-                wordlist = cuter.cut_order_word(order)
-            index = word2index(wordlist)
-            candidates = []
-            for w,i in zip(wordlist,index):
-                temp = {
-                    "word":w,
-                    "ids":i
-                }
-                candidates.append(temp)
+                candidates = label
             jsontemp = {
                 "task":item['task'],
                 "id":item['id'],
@@ -54,6 +63,33 @@ def get_data():
             }
             json_res.append(jsontemp)
         return json_res
+
+
+@app.route('/login',methods=['POST'])
+def login():
+    data = request.get_json()
+    name = data['name']
+    password = data['password']
+    res = ldb.check_labeler(name,password)
+    return {'info':res}
+
+@app.route('/register',methods=['POST'])
+def register():
+    data = request.get_json()
+    name = data['name']
+    password = data['password']
+    res = ldb.add_labeler(name,password)
+    return {'result':res}
+
+@app.route('/tasklist',methods=['POST'])
+def tasklist():
+    data = request.get_json()
+    name = data['name']
+    task = data['task']
+    res = ldb.get_label_table(name,task)
+    
+    return res
+
 
 @app.route('/labeled',methods=['POST'])
 def update():
@@ -71,15 +107,19 @@ def update():
         }]
     }
     '''
-    data = request.get_json()
-    task = data['task']
-    id = data['id']
-    labeler = data['labeler']
-    intent = data['intent']
-    sender = data['sender']
-    candidate = data['candidates']
-    res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,labelinfo=candidate)
-    return res
+    try:
+        data = request.get_json()
+        task = data['task']
+        id = data['id']
+        labeler = data['labeler']
+        intent = data['intent']
+        sender = data['sender']
+        candidate = data['candidates']
+        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,labelinfo=candidate)
+        return res
+    except:
+        return {'error':Exception}
+    
 
 if __name__=='__main__':
-    app.run(host='0.0.0.0',port=8093)
+    app.run(host='0.0.0.0',port=18080)

@@ -1,5 +1,7 @@
 import pymongo
 import config as cfg
+import pandas as pd
+from werkzeug.security import generate_password_hash,check_password_hash
 
 class DB_Contoller():
     def __init__(self,cfg) -> None:
@@ -9,35 +11,62 @@ class DB_Contoller():
         self.labeler = db[cfg.labeler]
 
     def read_file(self,file_path):
-        pass
-    
+        data = pd.read_excel(file_path)
+        result = []
+        for item in data.iloc():
+            order = item['管制语音原文']
+            order = ''.join(order.split())
+            
+            result.append(order)
+        return result
 
-    def manage_task(self,file_path,labeler):
-        pass
-
-    def get_unlabeledData(self,labeler,task,num=1):
-        ler = self.labeler.find_one({"name":labeler})
-        if ler:
-            tasklist = ler['task']
-            ids = None
-            for titem in tasklist:
-                if task == titem['taskname']:
-                    ids = titem['ids']
-            if ids != None:
-                start = ids[0]
-                end = ids[1]
-                fil = {
-                    "task":task,
-                    "id":{"$gte":start,"$lte":end},
-                    "tag":False
-                }
-                order = self.label.find(fil).limit(num)
-                result = [item for item in order]
-                return result
+    def manage_task(self,file_path,taskname,labelers):
+        data = self.read_file(file_path=file_path)
+        task_num = len(data)//len(labelers)
+        for i in range(len(labelers)):
+            self.add_labeler(labelers[i])
+            if i+1==len(labelers):
+                end = len(data)
             else:
-                return f'{labeler} without {task} task'
+                end = (i+1)*task_num
+            situation = self.add_task(labelers[i],taskname,i*task_num,end-1)
+            if situation != 'task add success':
+                self.change_task(labelers[i],taskname,i*task_num,end)
+        for i in range(len(data)):
+            self.insert_LabelData(taskname,i,data[i])
+        return True
+
+    def get_unlabeledData(self,labeler,task,num=1,id=-1):
+        if id != -1:
+            access = self.check_task(name=labeler,task=task,id=id)
+            if access == 'access':
+                temp = self.get_LabelData(task=task,id=id)
+                return [temp]
+            else:
+                return 'access refused'
         else:
-            return f'{labeler} labeler not exist'
+            ler = self.labeler.find_one({"name":labeler})
+            if ler:
+                tasklist = ler['task']
+                ids = None
+                for titem in tasklist:
+                    if task == titem['taskname']:
+                        ids = titem['ids']
+                if ids != None:
+                    start = ids[0]
+                    end = ids[1]
+                    fil = {
+                        "task":task,
+                        "id":{"$gte":start,"$lte":end},
+                        "tag":False
+                    }
+                    order = self.label.find(fil).limit(num)
+                    result = [item for item in order]
+                    return result
+                else:
+                    return f'{labeler} without {task} task'
+            else:
+                return f'{labeler} labeler not exist'
 
 
     def insert_LabelData(self,task,id,order):
@@ -61,6 +90,32 @@ class DB_Contoller():
     def get_LabelData(self,task,id):
         exist = self.label.find_one({"task":task,"id":id})
         return exist
+
+    def get_label_table(self,name,task):
+        lbr = self.labeler.find_one({'name':name})
+        if lbr['rule'] == 'labeler':
+            tasklist = lbr['task']
+            for item in tasklist:
+                if item['taskname'] == task:
+                    start,end = item['ids']
+                    fil = {
+                        "task":task,
+                        "id":{"$gte":start,"$lte":end}
+                    }
+                    order = self.label.find(fil,{"_id":0,"id":1,"order":1,"tag":1})
+                    result = [item for item in order]
+                    return result
+            return {'error':'no task'}
+        elif lbr['rule'] == 'admin':
+            fil = {
+                "task":task
+            }
+            order = self.label.find(fil,{"_id":0,"id":1,"order":1,"tag":1})
+            result = [item for item in order]
+            return result
+        else:
+            return {'error':'user error'}
+
 
     def delete_labelData(self,task,id):
         res = self.label.delete_one({"task":task,"id":id})
@@ -87,11 +142,13 @@ class DB_Contoller():
             return access
 
     #-----------------------labeler-----------------------
-    def add_labeler(self,name):
+    def add_labeler(self,name,password,rule='labeler'):
         item = self.labeler.find_one({'name':name})
         if item == None:
             labeler = {
                 "name":name,
+                "rule":rule,
+                "password":generate_password_hash(password),
                 "task":[]
             }
             self.labeler.insert_one(labeler)
@@ -133,21 +190,42 @@ class DB_Contoller():
     def check_task(self,name,task,id):
         lbr = self.labeler.find_one({'name':name})
         if lbr:
-            tasklist = lbr['task']
-            for item in tasklist:
-                if task == item['taskname']:
-                    ids = item['ids']
-                    if ids[0] <= id <= ids[1]:
-                        return 'access'
-                    else:
-                        return "id can not access"
-            return f'{name} no {task} task'
+            if lbr['rule'] == "admin":
+                return 'access'
+            else:
+                tasklist = lbr['task']
+                for item in tasklist:
+                    if task == item['taskname']:
+                        ids = item['ids']
+                        if ids[0] <= id <= ids[1]:
+                            return 'access'
+                        else:
+                            return f"{name} task-{task} id:{id} can not access"
+                return f'{name} no {task} task'
         else:
             return f'{name} not exist'
-        
+    
+    def check_labeler(self,name,password):
+        lbr = self.labeler.find_one({'name':name})
+        if lbr:
+            if check_password_hash(lbr['password'],password):
+                return 'access'
+            else:
+                return 'labeler or password error'
+        else:
+            return f'{name} not exist'
+
+    def _set_labeler_password(self,name,newpassword='123456'):
+        lbr = self.labeler.find_one({'name':name})
+        if lbr:
+            self.labeler.update_one({'name':name},{"$set":{'password':generate_password_hash(newpassword)}})
+            return 'success'
+        else:
+            return f'{name} not exist'
+
 if __name__=="__main__":
     db = DB_Contoller(cfg)
-    res = db.insert_LabelData('test',2,'你好南方六六幺五北京alphadelta六两三以后直飞alphadelta六四六')
+    # res = db.insert_LabelData('test',2,'你好南方六六幺五北京alphadelta六两三以后直飞alphadelta六四六')
     # res = db.get_LabelData('test',1)
     # res = db.add_labeler('fei')
     # res = db.add_task('fei','test',0,100)
@@ -156,4 +234,10 @@ if __name__=="__main__":
     # res = db.change_task('fei','test',0,200)
     # res = db.delete_labelData('test',1)
     # res = db.check_task('feiw','test',1)
+    # print(res)
+    # db.manage_task('task/minhang.xlsx',taskname='test1',labelers=['fei','wang'])
+    # res = db._set_labeler_password('wang')
+    # res = db.check_labeler('wang','123456')
+    # res = db.add_labeler('admin',password='admin',rule='admin')
+    res = db.get_label_table('wang','test1')
     print(res)
