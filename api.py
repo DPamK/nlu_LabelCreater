@@ -38,11 +38,14 @@ def get_data():
         for item in result:
             order = item['order']
             label = item['label']
-            if len(label) == 0:
-                if mode == 1:
-                    wordlist = cuter.cut_order(order)
-                else:
-                    wordlist = cuter.cut_order_word(order)
+            if mode == 1:
+                wordlist = cuter.cut_order(order)
+            else:
+                wordlist = cuter.cut_order_word(order)
+
+
+            if len(label) == 0 or len(label) != len(wordlist):
+                
                 index = word2index(wordlist)
                 candidates = []
                 for w,i in zip(wordlist,index):
