@@ -38,24 +38,39 @@ def get_data():
         for item in result:
             order = item['order']
             label = item['label']
-            if mode == 1:
-                wordlist = cuter.cut_order(order)
+            if mode == 0:
+                if len(label) == 0:
+                    wordlist = cuter.cut_order(order)
+                    index = word2index(wordlist)
+                    candidates = []
+                    for w,i in zip(wordlist,index):
+                        temp = {
+                            "word":w,
+                            "ids":i,
+                            'BIO':'O'
+                        }
+                        candidates.append(temp)
+                else:
+                    candidates = label
             else:
-                wordlist = cuter.cut_order_word(order)
-
-
-            if len(label) == 0 or len(label) != len(wordlist):
+                if mode == 1:
+                    wordlist = cuter.cut_order(order)
+                elif mode == 2:
+                    wordlist = cuter.cut_order_word(order)
+                else:
+                    wordlist = cuter.cut_order_word(order)
                 
                 index = word2index(wordlist)
                 candidates = []
                 for w,i in zip(wordlist,index):
                     temp = {
                         "word":w,
-                        "ids":i
+                        "ids":i,
+                        'BIO':'O'
                     }
                     candidates.append(temp)
-            else:
-                candidates = label
+                
+            
             jsontemp = {
                 "task":item['task'],
                 "id":item['id'],
@@ -89,7 +104,11 @@ def tasklist():
     data = request.get_json()
     name = data['name']
     task = data['task']
-    res = ldb.get_label_table(name,task)
+    if task != '':
+        
+        res = ldb.get_label_table(name,task)
+    else:
+        res = ldb.get_tasklist(name)
     
     return res
 
@@ -117,8 +136,9 @@ def update():
         labeler = data['labeler']
         intent = data['intent']
         sender = data['sender']
+        tag = data['attention'] == False
         candidate = data['candidates']
-        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,labelinfo=candidate)
+        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,labelinfo=candidate,tag=tag)
         return res
     except:
         return {'error':Exception}

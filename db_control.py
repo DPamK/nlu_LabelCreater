@@ -14,26 +14,37 @@ class DB_Contoller():
         data = pd.read_excel(file_path)
         result = []
         for item in data.iloc():
-            order = item['管制语音原文']
+            id = item['序号']
+            id = int(id)
+            order = item['通话']
+            order = str(order)
             order = ''.join(order.split())
             
-            result.append(order)
+            result.append([id,order])
         return result
 
     def manage_task(self,file_path,taskname,labelers):
         data = self.read_file(file_path=file_path)
         task_num = len(data)//len(labelers)
         for i in range(len(labelers)):
-            self.add_labeler(labelers[i])
-            if i+1==len(labelers):
-                end = len(data)
+            lbr = self.labeler.find_one({"name":labelers[i]})
+            if lbr == None:
+                return 'labeler {labelers[i]} not exist'
             else:
-                end = (i+1)*task_num
-            situation = self.add_task(labelers[i],taskname,i*task_num,end-1)
-            if situation != 'task add success':
-                self.change_task(labelers[i],taskname,i*task_num,end)
+                if i+1==len(labelers):
+                    end = len(data)
+                else:
+                    end = (i+1)*task_num
+                start_id = data[i*task_num][0]
+                end_id = data[end-1][0]
+                situation = self.add_task(labelers[i],taskname,start_id,end_id)
+                if situation != 'task add success':
+                    self.change_task(labelers[i],taskname,i*task_num,end)
+
         for i in range(len(data)):
-            self.insert_LabelData(taskname,i,data[i])
+            id,order = data[i]
+            self.insert_LabelData(task=taskname,id=id,order=order)
+        self.admin_add_task('admin',task=taskname,labeler=labelers)
         return True
 
     def get_unlabeledData(self,labeler,task,num=1,id=-1):
@@ -76,7 +87,7 @@ class DB_Contoller():
                 'id':id,
                 'task':task,
                 'order':order,
-                "intent":"",
+                "intent":[],
                 "sender":"",
                 "tag":False,
                 'label':[],
@@ -91,7 +102,36 @@ class DB_Contoller():
         exist = self.label.find_one({"task":task,"id":id})
         return exist
 
+    def get_tasklist(self,name):
+        lbr = self.labeler.find_one({'name':name})
+        if lbr['rule'] == 'labeler':
+            tasklist = lbr['task']
+            result = []
+            for task in tasklist:
+                result.append(task['taskname'])
+            return {"tasklist":result}
+        elif lbr['rule'] == 'admin':
+            result = {'tasklist':lbr['task']}
+            return result
+        else:
+            return {'error':'user error'}
+
     def get_label_table(self,name,task):
+        def get_newitem(item):
+            if item['tag'] == False and item['labeler'] == '':
+                tag = '未标注'
+            elif item['tag'] == False and item['labeler'] != '':
+                tag = '注意'
+            elif item['tag'] == True:
+                tag = '已标注'
+            else:
+                tag = '错误'
+            temp = {
+                'id':item['id'],
+                'order':item['order'],
+                'tag':tag
+            }
+            return temp
         lbr = self.labeler.find_one({'name':name})
         if lbr['rule'] == 'labeler':
             tasklist = lbr['task']
@@ -102,16 +142,17 @@ class DB_Contoller():
                         "task":task,
                         "id":{"$gte":start,"$lte":end}
                     }
-                    order = self.label.find(fil,{"_id":0,"id":1,"order":1,"tag":1})
-                    result = [item for item in order]
+                    order = self.label.find(fil,{"_id":0,"id":1,"order":1,"tag":1,'labeler':1})
+                    result = [get_newitem(item) for item in order]
+                    
                     return result
             return {'error':'no task'}
         elif lbr['rule'] == 'admin':
             fil = {
                 "task":task
             }
-            order = self.label.find(fil,{"_id":0,"id":1,"order":1,"tag":1})
-            result = [item for item in order]
+            order = self.label.find(fil,{"_id":0,"id":1,"order":1,"tag":1,'labeler':1})
+            result = [get_newitem(item) for item in order]
             return result
         else:
             return {'error':'user error'}
@@ -223,6 +264,97 @@ class DB_Contoller():
         else:
             return f'{name} not exist'
 
+    #---------------------admin--------------------------
+    def admin_add_task(self,name,task,labeler):
+        admin = self.labeler.find_one({'name':name})
+        if admin and admin['rule'] == 'admin':
+            tasklist = admin['task']
+            tasklist.append(task)
+            self.labeler.update_one({'name':name},{"$set":{'task':tasklist}})
+            labelerlist = admin['labelerlist']
+            labelerlist[task] = labeler
+            self.labeler.update_one({'name':name},{"$set":{'labelerlist':labelerlist}})
+            return True
+        else:
+            return False
+    
+
+    def admin_check_task(self,name):
+        admin = self.labeler.find_one({'name':name})
+        if admin and admin['rule'] == 'admin':
+            result = []
+            tasklist = admin['task']
+            labelerlist = admin['labelerlist']
+            for task in tasklist:
+                labelers = labelerlist[task]
+                all_nums = self.label.count_documents({'task':task})
+                labeled_num = self.label.count_documents({'task':task,'tag':True})
+                person_count = []
+                for labeler in labelers:
+                    lbr = self.labeler.find_one({'name':labeler})
+                    tasklist = lbr['task']
+                    for item in tasklist:
+                        if item['taskname'] == task:
+                            start,end = item['ids']
+                            break
+                    person_allnum = self.label.count_documents({'task':task,'id':{"$gte":start,"$lte":end}})
+                    person_labelnum = self.label.count_documents({'task':task,'id':{"$gte":start,"$lte":end},'tag':True})
+                    temp = {
+                        'labeler':labeler,
+                        'ids':[start,end],
+                        'all_num':person_allnum,
+                        'labeled_num':person_labelnum,
+                    }
+                    person_count.append(temp)
+                tasktemp ={
+                    'taskname':task,
+                    'all_order':all_nums,
+                    'labeled_num':labeled_num,
+                    'labeler_situation':person_count
+                }
+                result.append(tasktemp)
+            return result   
+        else:
+            return {'error':'access refused'}
+
+    def admin_output(self,name,task):
+        admin = self.labeler.find_one({'name':name})
+        if admin and admin['rule'] == 'admin':
+            pass
+        else:
+            return {'error':'access refused'}
+
+    def admin_task_clear(self,name,task):
+        admin = self.labeler.find_one({'name':name})
+        if admin and admin['rule'] == 'admin':
+            #删掉admin中的任务信息
+            tasklist = admin['task']
+            tasklist.remove(task)
+            self.labeler.update_one({'name':name},{"$set":{'task':tasklist}})
+            labelerlist = admin['labelerlist']
+            labelers = labelerlist.pop(task)
+            self.labeler.update_one({'name':name},{"$set":{'labelerlist':labelerlist}})
+            #删掉labeler中的任务信息
+            for labeler in labelers:
+                lbr = self.labeler.find_one({'name':labeler})
+                tasklist = lbr['task']
+                for taskitem in tasklist:
+                    if taskitem['taskname'] == task:
+                        break
+                tasklist.remove(taskitem)
+                self.labeler.update_one({'name':labeler},{"$set":{'task':tasklist}})
+            #删掉label中的任务信息
+            self.label.delete_many({'task':task})
+            return True
+        else:
+            return False
+
+    def admin_task_insert(self):
+        pass
+
+    def admin_manage_task(self):
+        pass
+
 if __name__=="__main__":
     db = DB_Contoller(cfg)
     # res = db.insert_LabelData('test',2,'你好南方六六幺五北京alphadelta六两三以后直飞alphadelta六四六')
@@ -235,9 +367,19 @@ if __name__=="__main__":
     # res = db.delete_labelData('test',1)
     # res = db.check_task('feiw','test',1)
     # print(res)
-    # db.manage_task('task/minhang.xlsx',taskname='test1',labelers=['fei','wang'])
+    # db.manage_task('task/minhang.xlsx',taskname='test2',labelers=['fei','wang'])
     # res = db._set_labeler_password('wang')
     # res = db.check_labeler('wang','123456')
     # res = db.add_labeler('admin',password='admin',rule='admin')
-    res = db.get_label_table('wang','test1')
+    # res = db.admin_add_task('fei','test2',['fei','wang'])
+    # res = db.admin_check_task('admin')
+    
+    # name = 'atc10'
+    # password = '367788'
+    # res = db.add_labeler(name=name,password=password)
+    # res = db.labeler.delete_one({'name':'atc01'})
+    # res = db.check_labeler('atc01','123456')
+    # res = db.admin_task_clear('admin','test2')
+    res = db.manage_task('task/task02.xlsx','task02',['atc02'])
+    # res = db.admin_task_clear('admin','task06')
     print(res)
