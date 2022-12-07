@@ -122,6 +122,7 @@ def update():
         "labeler":"fei",
         "intent":'intent',
         "sender":'sender',
+        "fixed":'new order',
         "candidates":[{
             "word":"1",
             "idx":[1,1],
@@ -138,8 +139,9 @@ def update():
         sender = data['sender']
         tag = data['attention'] == False
         candidate = data['candidates']
-        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,labelinfo=candidate,tag=tag)
-        return res
+        fixed = data['fixed']
+        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,labelinfo=candidate,tag=tag,fixed=fixed)
+        return {"info": res}
     except:
         return {'error':Exception}
     

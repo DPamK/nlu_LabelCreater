@@ -162,21 +162,39 @@ class DB_Contoller():
         res = self.label.delete_one({"task":task,"id":id})
         return res
 
-    def work_labelData(self,task,id,labeler,intent,sender,labelinfo,tag=True):
+    def work_labelData(self,task,id,labeler,intent,sender,labelinfo,tag=True,fixed=''):
         access = self.check_task(labeler,task,id)
         if access == "access":
             if self.label.find_one({"task":task,"id":id}):
-                upinfo = {
-                    'labeler':labeler,
-                    'label':labelinfo,
-                    'tag':tag,
-                    'sender':sender,
-                    "intent":intent
-                }
+                if fixed == '':
+                    upinfo = {
+                        'labeler':labeler,
+                        'label':labelinfo,
+                        'tag':tag,
+                        'sender':sender,
+                        "intent":intent
+                    }
+                else:
+                    lbr = self.label.find_one({"task":task,"id":id})
+                    order = lbr['order']
+                    if 'history' in lbr :
+                        history = lbr['history']
+                        history.append(order)
+                    else:
+                        history = [order]
+                    upinfo = {
+                        'labeler':labeler,
+                        'label':[],
+                        'tag':tag,
+                        'sender':sender,
+                        "intent":intent,
+                        'order':fixed,
+                        'history':history
+                    }
                 res = self.label.update_one({"id":id,'task':task},{"$set":upinfo})
                 print(res)
                 res = self.label.find_one({"id":id,'task':task})
-                res = str(res) + 'update'
+                res = str(res['id']) + 'update success'
                 return res
             return f'{task}-{id} no exist'
         else:
