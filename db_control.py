@@ -118,18 +118,35 @@ class DB_Contoller():
 
     def get_label_table(self,name,task):
         def get_newitem(item):
-            if item['tag'] == False and item['labeler'] == '':
+            abbr = ""
+            detail = ""
+            if 'discard' in item and item['discard'] == True:
+                tag = '废弃'
+            elif item['tag'] == False and item['labeler'] == '':
                 tag = '未标注'
             elif item['tag'] == False and item['labeler'] != '':
                 tag = '注意'
+                if 'infomation' in item:
+                    allinfo = item['infomation']
+                    if '：' in allinfo:
+                        abbr,detail = allinfo.split('：')
+                    else:
+                        abbr = allinfo
+                        detail = allinfo
+                else:
+                    abbr = ""
+                    detail = ""
             elif item['tag'] == True:
                 tag = '已标注'
             else:
                 tag = '错误'
+           
             temp = {
                 'id':item['id'],
                 'order':item['order'],
-                'tag':tag
+                'tag':tag,
+                'infomation':detail,
+                'abbr':abbr
             }
             return temp
         lbr = self.labeler.find_one({'name':name})
@@ -142,7 +159,7 @@ class DB_Contoller():
                         "task":task,
                         "id":{"$gte":start,"$lte":end}
                     }
-                    order = self.label.find(fil,{"_id":0,"id":1,"order":1,"tag":1,'labeler':1})
+                    order = self.label.find(fil,{"_id":0,"intent":0,"label":0,"history":0})
                     result = [get_newitem(item) for item in order]
                     
                     return result
@@ -151,7 +168,7 @@ class DB_Contoller():
             fil = {
                 "task":task
             }
-            order = self.label.find(fil,{"_id":0,"id":1,"order":1,"tag":1,'labeler':1})
+            order = self.label.find(fil,{"_id":0,"label":0,"history":0})
             result = [get_newitem(item) for item in order]
             return result
         else:
@@ -162,17 +179,19 @@ class DB_Contoller():
         res = self.label.delete_one({"task":task,"id":id})
         return res
 
-    def work_labelData(self,task,id,labeler,intent,sender,labelinfo,tag=True,fixed=''):
+    def work_labelData(self,task,id,labeler,intent,sender,labelinfo,tag=True,infomation='',discard=False,fixed=''):
         access = self.check_task(labeler,task,id)
         if access == "access":
             if self.label.find_one({"task":task,"id":id}):
+                # 对于是否修改原始order的两套逻辑
                 if fixed == '':
                     upinfo = {
                         'labeler':labeler,
                         'label':labelinfo,
                         'tag':tag,
                         'sender':sender,
-                        "intent":intent
+                        "intent":intent,
+                        'discard':discard,
                     }
                 else:
                     lbr = self.label.find_one({"task":task,"id":id})
@@ -189,10 +208,12 @@ class DB_Contoller():
                         'sender':sender,
                         "intent":intent,
                         'order':fixed,
-                        'history':history
+                        'history':history,
                     }
+                if infomation != "":
+                    upinfo['infomation'] = infomation
+                
                 res = self.label.update_one({"id":id,'task':task},{"$set":upinfo})
-                print(res)
                 res = self.label.find_one({"id":id,'task':task})
                 res = str(res['id']) + 'update success'
                 return res
@@ -398,6 +419,6 @@ if __name__=="__main__":
     # res = db.labeler.delete_one({'name':'atc01'})
     # res = db.check_labeler('atc01','123456')
     # res = db.admin_task_clear('admin','test2')
-    res = db.manage_task('task/task02.xlsx','task02',['atc02'])
+    res = db.manage_task('task/task21.xlsx','task21',['atc06'])
     # res = db.admin_task_clear('admin','task06')
     print(res)

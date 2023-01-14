@@ -3,6 +3,7 @@ from flask_cors import CORS
 from db_control import DB_Contoller
 from cut_mode import CutOrder,word2index
 import config as cfg
+from loguru import logger
 
 app = Flask(__name__)
 ldb = DB_Contoller(cfg)
@@ -109,7 +110,7 @@ def tasklist():
         res = ldb.get_label_table(name,task)
     else:
         res = ldb.get_tasklist(name)
-    
+
     return res
 
 
@@ -122,7 +123,10 @@ def update():
         "labeler":"fei",
         "intent":'intent',
         "sender":'sender',
+        'attention':False,
         "fixed":'new order',
+        "information":'注意信息',
+        "discard":False,
         "candidates":[{
             "word":"1",
             "idx":[1,1],
@@ -138,9 +142,16 @@ def update():
         intent = data['intent']
         sender = data['sender']
         tag = data['attention'] == False
+        if 'discard' in data:
+            discard = data['discard']
+            info = data['information']
+        else:
+            discard = False
+            info = ''
         candidate = data['candidates']
         fixed = data['fixed']
-        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,labelinfo=candidate,tag=tag,fixed=fixed)
+        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,labelinfo=candidate,tag=tag,discard=discard,infomation=info,fixed=fixed)
+        logger.info(res)
         return {"info": res}
     except:
         return {'error':Exception}
