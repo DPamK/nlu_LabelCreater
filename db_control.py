@@ -116,6 +116,54 @@ class DB_Contoller():
         else:
             return {'error':'user error'}
 
+    def _get_data(self,tasklist):
+        def get_newitem(item):
+            abbr = ""
+            detail = ""
+            if 'discard' in item and item['discard'] == True:
+                tag = '废弃'
+            elif item['tag'] == False and item['labeler'] == '':
+                tag = '未标注'
+            elif item['tag'] == False and item['labeler'] != '':
+                tag = '注意'
+                if 'infomation' in item:
+                    allinfo = item['infomation']
+                    if allinfo == None:
+                        allinfo = ':'
+                    if '：' in allinfo:
+                        abbr,detail = allinfo.split('：')
+                    else:
+                        abbr = allinfo
+                        detail = allinfo
+                else:
+                    abbr = ""
+                    detail = ""
+            elif item['tag'] == True:
+                tag = '已标注'
+            else:
+                tag = '错误'
+           
+            temp = {
+                'id':item['id'],
+                'order':item['order'],
+                'intent':item['intent'],
+                'slots':item['label'],
+                'sender':item['sender'],
+                'tag':tag
+            }
+            return temp
+        result = []
+        for taskname in tasklist:
+            fil = {
+                "task":taskname
+            }
+            data = self.label.find(fil,{"_id":0,"history":0})
+            task_res = [get_newitem(item) for item in data]
+            result.extend(task_res)
+        return result
+
+
+
     def get_label_table(self,name,task):
         def get_newitem(item):
             abbr = ""
@@ -128,6 +176,8 @@ class DB_Contoller():
                 tag = '注意'
                 if 'infomation' in item:
                     allinfo = item['infomation']
+                    if allinfo == None:
+                        allinfo = ':'
                     if '：' in allinfo:
                         abbr,detail = allinfo.split('：')
                     else:
