@@ -78,6 +78,8 @@ def get_data():
                 "order":order,
                 "intent":item['intent'],
                 "sender":item['sender'],
+                'phase':item['phase'] if 'phase' in item else "",
+                'context':item['context'] if 'context' in item else "",
                 "candidates":candidates
             }
             json_res.append(jsontemp)
@@ -123,6 +125,8 @@ def update():
         "labeler":"fei",
         "intent":'intent',
         "sender":'sender',
+        'phase':'phase',
+        'context':'context',
         'attention':False,
         "fixed":'new order',
         "information":'注意信息',
@@ -141,6 +145,8 @@ def update():
         labeler = data['labeler']
         intent = data['intent']
         sender = data['sender']
+        phase = data['phase'] if 'phase' in data else ""
+        context = data['context'] if 'context' in data else ""
         tag = data['attention'] == False
         if 'discard' in data:
             discard = data['discard']
@@ -150,12 +156,41 @@ def update():
             info = ''
         candidate = data['candidates']
         fixed = data['fixed']
-        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,labelinfo=candidate,tag=tag,discard=discard,infomation=info,fixed=fixed)
+        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,phase=phase,context=context,
+                                 labelinfo=candidate,tag=tag,discard=discard,infomation=info,fixed=fixed)
         logger.info(res)
         return {"info": res}
     except:
         return {'error':Exception}
-    
+
+@app.route('/revise',methods=['POST'])
+def revise_table():
+    '''
+    data = {
+        "task":"task",
+        "id":1,
+        "labeler":"fei",
+        "intent":'intent',
+        "sender":'sender',
+        'phase':'phase',
+        'context':'context'
+    }
+    '''
+    try:
+        data = request.get_json()
+        task = data['task']
+        id = data['id']
+        labeler = data['labeler']
+        intent = data['intent']
+        sender = data['sender']
+        phase = data['phase'] if 'phase' in data else ""
+        context = data['context'] if 'context' in data else ""
+        
+        res = ldb.work_tableData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,phase=phase,context=context)
+        logger.info(res)
+        return {"info": res}
+    except:
+        return {'error':Exception} 
 
 if __name__=='__main__':
     app.run(host='0.0.0.0',port=18080)

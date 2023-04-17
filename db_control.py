@@ -91,7 +91,9 @@ class DB_Contoller():
                 "sender":"",
                 "tag":False,
                 'label':[],
-                'labeler':""
+                'labeler':"",
+                'phase':"",
+                'context':""
             }
             self.label.insert_one(temp)
             return True
@@ -196,6 +198,10 @@ class DB_Contoller():
                 'order':item['order'],
                 'tag':tag,
                 'infomation':detail,
+                'sender':item['sender'],
+                'intent':item['intent'],
+                'phase':item['phase'] if 'phase' in item else "",
+                'context':item['context'] if 'context' in item else "",
                 'abbr':abbr
             }
             return temp
@@ -209,7 +215,7 @@ class DB_Contoller():
                         "task":task,
                         "id":{"$gte":start,"$lte":end}
                     }
-                    order = self.label.find(fil,{"_id":0,"intent":0,"label":0,"history":0})
+                    order = self.label.find(fil,{"_id":0,"label":0,"history":0})
                     result = [get_newitem(item) for item in order]
                     
                     return result
@@ -229,7 +235,7 @@ class DB_Contoller():
         res = self.label.delete_one({"task":task,"id":id})
         return res
 
-    def work_labelData(self,task,id,labeler,intent,sender,labelinfo,tag=True,infomation='',discard=False,fixed=''):
+    def work_labelData(self,task,id,labeler,intent,sender,phase,context,labelinfo,tag=True,infomation='',discard=False,fixed=''):
         access = self.check_task(labeler,task,id)
         if access == "access":
             if self.label.find_one({"task":task,"id":id}):
@@ -241,6 +247,8 @@ class DB_Contoller():
                         'tag':tag,
                         'sender':sender,
                         "intent":intent,
+                        'phase':phase,
+                        'context':context,
                         'discard':discard,
                     }
                 else:
@@ -257,6 +265,8 @@ class DB_Contoller():
                         'tag':tag,
                         'sender':sender,
                         "intent":intent,
+                        'phase':phase,
+                        'context':context,
                         'order':fixed,
                         'history':history,
                     }
@@ -271,6 +281,24 @@ class DB_Contoller():
         else:
             return access
 
+    def work_tableData(self,task,id,labeler,intent,sender,phase,context):
+        access = self.check_task(labeler,task,id)
+        if access == "access":
+            if self.label.find_one({"task":task,"id":id}):
+                upinfo = {
+                    'labeler':labeler,
+                    'sender':sender,
+                    "intent":intent,
+                    'phase':phase,
+                    'context':context,
+                }
+                res = self.label.update_one({"id":id,'task':task},{"$set":upinfo})
+                res = self.label.find_one({"id":id,'task':task})
+                res = str(res['id']) + 'update success'
+                return res
+            return f'{task}-{id} no exist'
+        else:
+            return access
     #-----------------------labeler-----------------------
     def add_labeler(self,name,password,rule='labeler'):
         item = self.labeler.find_one({'name':name})

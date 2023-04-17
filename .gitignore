@@ -131,3 +131,9 @@ dmypy.json
 #task
 task/
 log/
+
+label
+*.json
+*.xlsx
+*.in
+*.out
