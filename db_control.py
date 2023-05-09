@@ -13,14 +13,18 @@ class DB_Contoller():
     def read_file(self,file_path):
         data = pd.read_excel(file_path)
         result = []
+        num = 1
         for item in data.iloc():
-            id = item['序号']
-            id = int(id)
+            # id = item['序号']
+            # id = int(id)
             order = item['通话']
             order = str(order)
             order = ''.join(order.split())
+
+            id = num
             
             result.append([id,order])
+            num += 1
         return result
 
     def manage_task(self,file_path,taskname,labelers):
@@ -127,7 +131,7 @@ class DB_Contoller():
             elif item['tag'] == False and item['labeler'] == '':
                 tag = '未标注'
             elif item['tag'] == False and item['labeler'] != '':
-                tag = '注意'
+                tag = '存疑'
                 if 'infomation' in item:
                     allinfo = item['infomation']
                     if allinfo == None:
@@ -175,7 +179,7 @@ class DB_Contoller():
             elif item['tag'] == False and item['labeler'] == '':
                 tag = '未标注'
             elif item['tag'] == False and item['labeler'] != '':
-                tag = '注意'
+                tag = '存疑'
                 if 'infomation' in item:
                     allinfo = item['infomation']
                     if allinfo == None:
@@ -235,7 +239,7 @@ class DB_Contoller():
         res = self.label.delete_one({"task":task,"id":id})
         return res
 
-    def work_labelData(self,task,id,labeler,intent,sender,phase,context,labelinfo,tag=True,infomation='',discard=False,fixed=''):
+    def work_labelData(self,task,id,labeler,intent,sender,labelinfo,tag=True,infomation='',discard=False,fixed=''):
         access = self.check_task(labeler,task,id)
         if access == "access":
             if self.label.find_one({"task":task,"id":id}):
@@ -247,8 +251,6 @@ class DB_Contoller():
                         'tag':tag,
                         'sender':sender,
                         "intent":intent,
-                        'phase':phase,
-                        'context':context,
                         'discard':discard,
                     }
                 else:
@@ -265,8 +267,6 @@ class DB_Contoller():
                         'tag':tag,
                         'sender':sender,
                         "intent":intent,
-                        'phase':phase,
-                        'context':context,
                         'order':fixed,
                         'history':history,
                     }
@@ -294,7 +294,7 @@ class DB_Contoller():
                 }
                 res = self.label.update_one({"id":id,'task':task},{"$set":upinfo})
                 res = self.label.find_one({"id":id,'task':task})
-                res = str(res['id']) + 'update success'
+                res = str(res['id']) + ' update success'
                 return res
             return f'{task}-{id} no exist'
         else:
@@ -497,6 +497,6 @@ if __name__=="__main__":
     # res = db.labeler.delete_one({'name':'atc01'})
     # res = db.check_labeler('atc01','123456')
     # res = db.admin_task_clear('admin','test2')
-    res = db.manage_task('task/task21.xlsx','task21',['atc06'])
+    res = db.manage_task('task/task25.xlsx','task25',['atc06'])
     # res = db.admin_task_clear('admin','task06')
     print(res)

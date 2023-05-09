@@ -10,13 +10,13 @@ def data2excel(data,save_path,save_name):
     intent = []
     tag = []
     for item in data:
-        if item['tag'] == '已标注' or item['tag'] == '注意':
+        if item['tag'] == '已标注' or item['tag'] == '存疑':
             id.append(item['id'])
             order.append(item['order'])
             temp_intent_str = '/'.join(item['intent'])
             intent.append(temp_intent_str)
-            if item['tag'] == '注意':
-                tag.append('注意')
+            if item['tag'] == '存疑':
+                tag.append('存疑')
             else:
                 tag.append('')
     output = pd.DataFrame({
@@ -35,7 +35,7 @@ def saveJson(data,filePath):
 def data2json(data,save_path,save_name):
     res = []
     for item in data:
-        if item['tag'] != '注意':
+        if item['tag'] != '存疑':
             res.append(item)
     saveJson(res,os.path.join(save_path,save_name))
 
@@ -92,27 +92,27 @@ if __name__=="__main__":
     #     for i in in_list:
     #         f.write(i+'\n')
 
-    nums = 0
-    out_list = []
-    for m in data:
-        str = ""
-        before = ""
-        length = 0
-        if m["tag"] == "已标注":
-            nums += 1
-            for n in m["slots"]:
-                length += 1
-                if n["BIO"] == "O":
-                    str += n["BIO"] + " "
-                elif n["BIO"] == before:
-                    str += "I-" + n["BIO"] + " "
-                else:
-                    str += "B-" + n["BIO"] + " "
-                    before = n["BIO"]
-            if nums == 214:
-                print(str)
-                print(length)
-            out_list.append(str)
+    # nums = 0
+    # out_list = []
+    # for m in data:
+    #     str = ""
+    #     before = ""
+    #     length = 0
+    #     if m["tag"] == "已标注":
+    #         nums += 1
+    #         for n in m["slots"]:
+    #             length += 1
+    #             if n["BIO"] == "O":
+    #                 str += n["BIO"] + " "
+    #             elif n["BIO"] == before:
+    #                 str += "I-" + n["BIO"] + " "
+    #             else:
+    #                 str += "B-" + n["BIO"] + " "
+    #                 before = n["BIO"]
+    #         if nums == 214:
+    #             print(str)
+    #             print(length)
+    #         out_list.append(str)
     # file_path = os.path.join(save_path, 'seq.out')
     # with open(file_path, 'w', encoding='utf-8') as f:
     #     for i in out_list:
@@ -131,3 +131,15 @@ if __name__=="__main__":
     # with open(file_path, 'w', encoding='utf-8') as f:
     #     for i in label_list:
     #         f.write(i+'\n')
+
+
+    sender_list = []
+    for m in data:
+        str = ''
+        if m["tag"] == "已标注":
+            str = m["sender"]
+            sender_list.append(str)
+    file_path = os.path.join(save_path, 'sender')
+    with open(file_path, 'w', encoding='utf-8') as f:
+        for i in sender_list:
+            f.write(i+'\n')

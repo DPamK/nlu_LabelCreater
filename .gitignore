@@ -137,3 +137,5 @@ label
 *.xlsx
 *.in
 *.out
+*.bin
+data/

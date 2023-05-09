@@ -4,10 +4,12 @@ from db_control import DB_Contoller
 from cut_mode import CutOrder,word2index
 import config as cfg
 from loguru import logger
+from predict_sentence import Model
 
 app = Flask(__name__)
 ldb = DB_Contoller(cfg)
 cuter = CutOrder('dict/jiebaword.txt')
+nlu_model = Model(cfg)
 CORS(app, resources=r'/*')
 
 @app.route('/data',methods=['POST'])
@@ -33,55 +35,12 @@ def get_data():
     else:
         id = -1
     result = ldb.get_unlabeledData(labeler=name,task=task,num=num,id=id)
+
     if isinstance(result,str):
         return {"error":result}
     else:
         for item in result:
-            order = item['order']
-            label = item['label']
-            if mode == 0:
-                if len(label) == 0:
-                    wordlist = cuter.cut_order(order)
-                    index = word2index(wordlist)
-                    candidates = []
-                    for w,i in zip(wordlist,index):
-                        temp = {
-                            "word":w,
-                            "ids":i,
-                            'BIO':'O'
-                        }
-                        candidates.append(temp)
-                else:
-                    candidates = label
-            else:
-                if mode == 1:
-                    wordlist = cuter.cut_order(order)
-                elif mode == 2:
-                    wordlist = cuter.cut_order_word(order)
-                else:
-                    wordlist = cuter.cut_order_word(order)
-                
-                index = word2index(wordlist)
-                candidates = []
-                for w,i in zip(wordlist,index):
-                    temp = {
-                        "word":w,
-                        "ids":i,
-                        'BIO':'O'
-                    }
-                    candidates.append(temp)
-                
-            
-            jsontemp = {
-                "task":item['task'],
-                "id":item['id'],
-                "order":order,
-                "intent":item['intent'],
-                "sender":item['sender'],
-                'phase':item['phase'] if 'phase' in item else "",
-                'context':item['context'] if 'context' in item else "",
-                "candidates":candidates
-            }
+            jsontemp = get_json(item,mode)
             json_res.append(jsontemp)
         return json_res
 
@@ -115,7 +74,6 @@ def tasklist():
 
     return res
 
-
 @app.route('/labeled',methods=['POST'])
 def update():
     '''
@@ -145,8 +103,7 @@ def update():
         labeler = data['labeler']
         intent = data['intent']
         sender = data['sender']
-        phase = data['phase'] if 'phase' in data else ""
-        context = data['context'] if 'context' in data else ""
+        
         tag = data['attention'] == False
         if 'discard' in data:
             discard = data['discard']
@@ -156,7 +113,7 @@ def update():
             info = ''
         candidate = data['candidates']
         fixed = data['fixed']
-        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,phase=phase,context=context,
+        res = ldb.work_labelData(task=task,id=id,labeler=labeler,intent=intent,sender=sender,
                                  labelinfo=candidate,tag=tag,discard=discard,infomation=info,fixed=fixed)
         logger.info(res)
         return {"info": res}
@@ -190,7 +147,76 @@ def revise_table():
         logger.info(res)
         return {"info": res}
     except:
-        return {'error':Exception} 
+        return {'error':Exception}
+    
+def get_slots(slots):
+    res = []
+    num = 0
+    for word,BIOkey in slots:
+        
+        temp = {
+                "BIO": BIOkey.split('-')[-1],
+                "ids": [
+                    num,
+                    num+len(word)-1
+                ],
+                "word": word
+            }
+        num = num+len(word)
+        res.append(temp)
+    return res
+
+def get_intent(intent):
+    if '#' in intent:
+        res = intent.split('#')
+    else:
+        res = [intent]
+    return res
+
+def get_json(item,mode):
+    order = item['order']
+    intent = item['intent']
+    label = item['label']
+    if mode == 0:
+        if len(label) == 0:
+            cut_str = cuter.cut_order(order)
+            newstr = ' '.join(cut_str)
+            res = nlu_model.predict(newstr)
+            if len(intent) == 0:
+                intent = get_intent(res['intent'])
+            candidates = get_slots(res['slots'])
+        else:
+            candidates = label
+    else:
+        if mode == 1:
+            wordlist = cuter.cut_order(order)
+        elif mode == 2:
+            wordlist = cuter.cut_order_word(order)
+        else:
+            wordlist = cuter.cut_order_word(order)
+        
+        index = word2index(wordlist)
+        candidates = []
+        for w,i in zip(wordlist,index):
+            temp = {
+                "word":w,
+                "ids":i,
+                'BIO':'O'
+            }
+            candidates.append(temp)
+
+    jsontemp = {
+        "task":item['task'],
+        "id":item['id'],
+        "order":order,
+        "intent":intent,
+        "sender":item['sender'],
+        'phase':item['phase'] if 'phase' in item else "",
+        'context':item['context'] if 'context' in item else "",
+        "candidates":candidates
+    }
+
+    return jsontemp
 
 if __name__=='__main__':
-    app.run(host='0.0.0.0',port=18080)
+    app.run(host='0.0.0.0',port=18080,debug=True)
