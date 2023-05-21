@@ -54,14 +54,14 @@ class CutOrder():
         return seglist
 
 if __name__=="__main__":
-    text = '你好南方六六幺五北京alphadelta六两三以后直飞alphadelta六四六'
+    text = '修正海压幺洞幺五hotelhotel幺幺到三洞左等待点海南拐洞两五'
     cutter = CutOrder('dict/jiebaword.txt')
     res = cutter.cut_order(text)
     index = word2index(res)
     print(res)
     print(index)
 
-    # 制作字典
+    # # 制作字典
     # with open('dict/chatword.txt','r',encoding='utf8') as fp:
     #     alltext = fp.readlines()
     # res = []
